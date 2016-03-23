@@ -1,0 +1,14 @@
+--- /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb	2016-02-28 05:41:01.924003375 +0000
++++ /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client_new.rb	2016-02-28 05:41:23.952003106 +0000
+@@ -206,7 +206,10 @@
+   private
+ 
+   def rest
+-    @rest ||= Chef::REST.new(chef_server_url, client_name, client_key)
++    @rest ||= begin
++      require 'chef/rest'
++      Chef::REST.new(chef_server_url, client_name, client_key)
++    end
+   end
+ 
+   def get_config
