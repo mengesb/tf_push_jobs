@@ -11,20 +11,26 @@ resource "null_resource" "patch-clients" {
     host        = "${element(split(",", var.push_jobs_client), count.index)}"
   }
   provisioner "file" {
-    #source      = "${var.client_patch}"
-    source      = "${path.module}/files/pushy_client.rb.patch"
-    destination = "/tmp/pushy_client.rb.patch"
+    source      = "${path.module}/files/pushy_client.rb.patchfile"
+    destination = "/tmp/pushy_client.rb.patchfile"
+  }
+  provisioner "file" {
+    source      = "${path.module}/files/pushy_client.rb"
+    destination = "/tmp/pushy_client.rb"
   }
   provisioner "remote-exec" {
     inline = [
-      "curl -s https://packagecloud.io/install/repositories/chef/current/script.deb.sh -o /tmp/script.deb.sh",
-      "curl -s https://packagecloud.io/install/repositories/chef/current/script.rpm.sh -o /tmp/script.rpm.sh",
-      "[ -x /usr/bin/yum ] && sudo bash /tmp/script.rpm.sh || sudo bash /tmp/script.deb.sh",
-      "rm -f /tmp/script.*.sh",
-      "[ -f /etc/yum.repos.d/chef_current.repo ] && sudo sed -i 's|enabled=1|enabled=0|g' /etc/yum.repos.d/chef_current.repo || sudo sed -i 's|^|#|g' /etc/apt/repos.d/chef_current.list",
-      "[ -x /usr/bin/yum ] && sudo yum install -y -q -e 0 --disablerepo=* --enablerepo=chef_current push-jobs-client || sudo apt-get -qq install -y -t chef_current push-jobs-client",
-      "sudo yum install -y patch",
-      "sudo patch /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb < /tmp/pushy_client.rb.patch",
+      "curl -sL ${lookup(var.packagecloud, var.ami_os)} | sudo bash",
+      "sudo ${lookup(var.packager, var.ami_os)} ${lookup(var.packager_opts, var.ami_os)} ${lookup(var.client_package_version, var.ami_os)}",
+      "sudo ${lookup(var.packager, var.ami_os)} patch",
+      "sudo cp /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb pushy_client.rb.orig",
+      "sudo chown ${lookup(var.ami_usermap, var.ami_os)} pushy_client.rb.orig",
+      "sudo patch -i /tmp/pushy_client.rb.patchfile /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb",
+      "[ $? -ne 0 ] && sudo mv /tmp/pushy_client.rb /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb || echo OK",
+      "sudo chown root:root /opt/push-jobs-client/embedded/lib/ruby/gems/2.1.0/gems/opscode-pushy-client-2.0.2/lib/pushy_client.rb",
+      "[ -f /etc/yum.repos.d/chef_current.repo ] && sudo rm -f /etc/yum.repos.d/chef_current.repo || echo OK",
+      "[ -f /etc/apt/sources.list.d/chef_current.list ] && sudo rm -f /etc/apt/sources.list.d/chef_current.list || echo OK",
+      "echo Say WHAT again I double dare you"
     ]
   }
 }
@@ -37,14 +43,17 @@ resource "null_resource" "patch-servers" {
   }
   provisioner "remote-exec" {
     inline = [
-      "curl -s https://packagecloud.io/install/repositories/chef/current/script.deb.sh -o /tmp/script.deb.sh",
-      "curl -s https://packagecloud.io/install/repositories/chef/current/script.rpm.sh -o /tmp/script.rpm.sh",
-      "[ -x /usr/bin/yum ] && sudo bash /tmp/script.rpm.sh || sudo bash /tmp/script.deb.sh",
-      "rm -f /tmp/script.*.sh",
-      "[ -x /usr/bin/yum ] && sudo yum install -y -q -e 0 --disablerepo=* --enablerepo=chef_current opscode-push-jobs-server || sudo apt-get -qq install -y -t chef_current opscode-push-jobs-server",
+      "set -x",
+      "sudo ${lookup(var.packages_chef_requirements, var.ami_os)}",
+      "echo -e '${lookup(var.packages_chef_text, var.ami_os)}' > repo.file",
+      "[ -d /etc/yum.repos.d ] && sudo mv repo.file /etc/yum.repos.d/chef_current.repo || echo OK",
+      "[ -d /etc/apt/sources.list.d ] && sudo mv repo.file /etc/apt/sources.list.d/chef_current.list || echo OK",
+      "sudo ${lookup(var.check_update, var.ami_os)}",
+      "sudo ${lookup(var.packager, var.ami_os)} ${lookup(var.packager_opts, var.ami_os)} ${lookup(var.server_package_version, var.ami_os)}",
       "sudo opscode-push-jobs-server-ctl reconfigure",
-      "[ -f /etc/yum.repos.d/chef_current.repo ] && sudo rm -f /etc/yum.repos.d/chef_current.repo || sudo rm -f /etc/apt/repos.d/chef_current.list",
-      "echo 'Chef CURRENT repo removed'",
+      "[ -f /etc/yum.repos.d/chef_current.repo ] && sudo rm -f /etc/yum.repos.d/chef_current.repo || echo OK",
+      "[ -f /etc/apt/sources.list.d/chef_current.list ] && sudo rm -f /etc/apt/sources.list.d/chef_current.list || echo OK",
+      "echo Say WHAT again I double dare you"
     ]
   }
 }
